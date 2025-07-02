@@ -110,9 +110,9 @@ class InventoryEnvironment:
         }
         print(f"Normalization params: {self.norm_params}")
     
-    def reset(self, sku: str = None, city: str = None) -> np.ndarray:
+    def reset(self, sku: str = "", city: str = "") -> np.ndarray:
         """Reset environment for new episode"""
-        if sku is None or city is None:
+        if sku == "" or city == "":
             self.current_sku, self.current_city = random.choice(self.sku_city_combinations)
         else:
             self.current_sku, self.current_city = sku, city
@@ -457,6 +457,48 @@ class DQNAgent:
         
         self.losses.append(loss.item())
     
+    def save_model(self, filepath: str = "dqn_model_weights.pth"):
+        """Save the trained model weights"""
+        torch.save({
+            'q_network_state_dict': self.q_network.state_dict(),
+            'target_network_state_dict': self.target_network.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'epsilon': self.epsilon,
+            'training_step': self.training_step,
+            'episode_rewards': self.episode_rewards,
+            'service_levels': self.service_levels,
+            'losses': self.losses,
+            'model_config': {
+                'state_dim': self.state_dim,
+                'action_dim': self.action_dim,
+                'hidden_dims': [64, 32]  # Default hidden dimensions
+            }
+        }, filepath)
+        print(f"Model weights saved to {filepath}")
+    
+    def load_model(self, filepath: str = "dqn_model_weights.pth"):
+        """Load the trained model weights"""
+        import torch
+        try:
+            # Try with weights_only=False for backward compatibility
+            checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
+        except Exception as e:
+            # If that fails, try with weights_only=True and safe globals
+            from numpy.core import multiarray
+            import torch.serialization
+            torch.serialization.add_safe_globals([multiarray.scalar])
+            checkpoint = torch.load(filepath, map_location=self.device, weights_only=True)
+        
+        self.q_network.load_state_dict(checkpoint['q_network_state_dict'])
+        self.target_network.load_state_dict(checkpoint['target_network_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.epsilon = checkpoint['epsilon']
+        self.training_step = checkpoint['training_step']
+        self.episode_rewards = checkpoint['episode_rewards']
+        self.service_levels = checkpoint['service_levels']
+        self.losses = checkpoint['losses']
+        print(f"Model weights loaded from {filepath}")
+    
     def train(self, env: InventoryEnvironment, episodes: int = 1000):
         """Train the DQN agent with better monitoring"""
         print(f"Training DQN agent for {episodes} episodes...")
@@ -515,6 +557,9 @@ class DQNAgent:
                     last_reward = env.debug_info['rewards_breakdown'][-1]
                     print(f"  Last reward components: {last_reward['components']}")
                     print(f"  Chosen vs Optimal multiplier: {last_reward['chosen_multiplier']:.2f} vs {last_reward['optimal_multiplier']:.2f}")
+        
+        # Save model weights at the end of training
+        self.save_model()
 
 
 # Example usage with debugging

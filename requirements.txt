@@ -1,0 +1,14 @@
+numpy
+pandas
+torch
+matplotlib
+scipy
+fastapi
+uvicorn[standard]
+pydantic
+torch
+numpy
+pandas
+scipy
+matplotlib
+requests
